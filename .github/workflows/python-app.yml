@@ -1,0 +1,36 @@
+name: 定时运行IP脚本
+
+on:
+  schedule:
+    # 定时任务时间（UTC时区），每天凌晨2点执行（对应北京时间10点）
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码仓库
+        uses: actions/checkout@v4  # 这一步会将仓库代码拉取到运行环境的本地目录
+
+      - name: 设置Python环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'  # 与脚本兼容的Python版本
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests  # 脚本依赖requests库
+
+      - name: 运行脚本
+        run: python ip.py  # 执行本地拉取的脚本（仓库根目录下的ip.py）
+
+      - name: 保存输出文件（可选）
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-files
+          path: |
+            domestic_ikuai_ipgroup-*.txt
+            domestic_ikuai_acl-*.txt
+          retention-days: 7  # 保存7天
