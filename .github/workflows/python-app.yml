@@ -23,30 +23,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests  # 脚本依赖requests库
 
-      - name: 获取并运行脚本
+      - name: 下载并运行脚本
         run: |
           # 下载脚本
           curl -O https://raw.githubusercontent.com/bogy4218/703/refs/heads/main/ip.py
           # 运行脚本
           python ip.py
 
-      - name: 保存文件到仓库
+      - name: 提交更改
         run: |
-          # 假设生成的文件在当前目录下
-          # 如果需要，调整源文件路径
-          cp 需要保存的文件 ikuai_ipgroup-cn.txt
-          
-          # 配置Git
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-          
-          # 添加文件并提交
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           git add ikuai_ipgroup-cn.txt
-          # 只有当文件有变化时才提交
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update ikuai_ipgroup-cn.txt"
-          
-          # 推送更改
-          git push origin main
+          git commit -m "Update IP list"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
