@@ -1,46 +1,82 @@
-name: Update ikuai_ipgroup-cn.txt  # 工作流名称
+name: Auto Update Ikuai Files (with Date)
 
 # 触发条件：定时运行 + 手动触发（方便测试）
 on:
   schedule:
-    # Cron 表达式：定时执行时间（UTC 时区，比北京时间晚8小时）
-    # 示例：每天北京时间 02:00 执行（对应 UTC 18:00）
+    # Cron 表达式（UTC时区，以下为 每天北京时间 02:00 执行）
     - cron: '0 18 * * *'
-  workflow_dispatch:  # 允许手动在 Actions 页面触发，用于测试
+  workflow_dispatch:  # 允许手动触发测试
 
 jobs:
-  update-ipgroup:
-    runs-on: ubuntu-latest  # 使用 Ubuntu 系统运行任务
+  update-and-commit:
+    runs-on: ubuntu-latest
     steps:
-      # 步骤1：拉取仓库代码到 GitHub 服务器的运行环境
-      - name: Checkout repository
-        uses: actions/checkout@v4  # 拉取代码的官方 Action
+      ##########################################################################
+      # 步骤1：拉取仓库代码到运行环境
+      ##########################################################################
+      - name: Checkout repository code
+        uses: actions/checkout@v4
 
-      # 步骤2：安装 Python 环境（因脚本是 ip.py，需 Python 解释器）
-      - name: Set up Python
+      ##########################################################################
+      # 步骤2：安装 Python 环境（适配 ip.py 运行）
+      ##########################################################################
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'  # 选择与 ip.py 兼容的 Python 版本
+          python-version: '3.10'  # 可根据 ip.py 需求调整版本（如 3.9/3.11）
 
-      # 步骤3（可选）：安装 ip.py 依赖（若脚本需要第三方库）
-      - name: Install dependencies
+      ##########################################################################
+      # 步骤3：安装 ip.py 依赖（若脚本用到 requests 等库，按需保留/删除）
+      ##########################################################################
+      - name: Install required dependencies
         run: |
           python -m pip install --upgrade pip
-          # 若 ip.py 需要 requests 等库，添加：pip install requests
-          # 无依赖则删除此步骤
+          # 若 ip.py 需要第三方库，在此添加安装命令（示例）：
+          # pip install requests beautifulsoup4
+          # 无依赖则保持空即可
 
-      # 步骤4：运行 ip.py，生成/更新 ikuai_ipgroup-cn.txt
-      - name: Run ip.py to update file
-        run: python ip.py  # 执行脚本（确保脚本执行后更新目标文件）
+      ##########################################################################
+      # 步骤4：运行 ip.py 生成带日期的文件
+      ##########################################################################
+      - name: Run ip.py to generate date-named files
+        run: |
+          echo "=== 开始执行 ip.py 生成文件 ==="
+          python ip.py
+          echo "=== 脚本执行完成，查看生成的文件 ==="
+          ls -l domestic_ikuai_*.txt  # 列出生成的文件（便于日志排查）
 
-      # 步骤5：提交更新后的文件到仓库
-      - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v5  # 自动提交的第三方 Action
+      ##########################################################################
+      # 步骤5：将新生成的带日期文件添加到 Git 暂存区（核心修复步骤）
+      ##########################################################################
+      - name: Add new date-named files to Git staging
+        run: |
+          # 通配符匹配：domestic_ikuai_acl-YYYYMMDD.txt 和 domestic_ikuai_ipgroup-YYYYMMDD.txt
+          git add "domestic_ikuai_acl-*.txt"
+          git add "domestic_ikuai_ipgroup-*.txt"
+          echo "=== 已添加文件到暂存区 ==="
+          git status  # 查看暂存区状态（便于日志排查）
+
+      ##########################################################################
+      # 步骤6：提交并推送到仓库
+      ##########################################################################
+      - name: Commit and push changes to GitHub
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          # 提交信息（可自定义）
-          commit_message: "Auto update ikuai_ipgroup-cn.txt via ip.py"
-          # 要提交的文件（仅更新目标文件，避免意外提交其他文件）
-          file_pattern: "ikuai_ipgroup-cn.txt"
-          # 提交者信息（可留空，默认使用 GitHub Actions 机器人）
+          # 提交信息（包含运行时间，便于追溯）
+          commit_message: "Auto generate ikuai files (run at: ${{ github.run_started_at }})"
+          # 匹配带日期的目标文件（通配符）
+          file_pattern: "domestic_ikuai_acl-*.txt domestic_ikuai_ipgroup-*.txt"
+          # 提交者信息（默认 GitHub 机器人）
           commit_user_name: "GitHub Actions Bot"
           commit_user_email: "actions@github.com"
+
+      ##########################################################################
+      # 步骤7（可选）：清理旧工作流记录（避免日志堆积）
+      ##########################################################################
+      - name: Delete old workflow runs (keep latest 5)
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          keep_minimum_runs: 5  # 保留最近5条运行记录
+          workflow_id: "update-ikuai-files.yml"  # 需与当前工作流文件名一致
