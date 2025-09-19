@@ -1,0 +1,84 @@
+name: Auto Update Ikuai Files (Fixed Add Issue)
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # 北京时间 02:00 执行（UTC 18:00）
+  workflow_dispatch:  # 手动触发测试
+
+jobs:
+  update-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤1：拉取仓库（强制拉取最新代码，避免本地缓存问题）
+      - name: Checkout repository (force latest)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 拉取完整历史，避免浅克隆导致的跟踪异常
+
+      # 步骤2：安装 Python 环境
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 步骤3：安装依赖（按需保留）
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pip install requests  # 若需要，取消注释
+
+      # 步骤4：运行 ip.py 生成文件（添加文件存在性检查）
+      - name: Run ip.py and verify files
+        run: |
+          echo "=== 执行 ip.py 生成文件 ==="
+          python ip.py
+          
+          # 关键：检查文件是否生成成功（若失败直接终止，避免后续无效步骤）
+          if [ ! -f "domestic_ikuai_acl-*.txt" ] || [ ! -f "domestic_ikuai_ipgroup-*.txt" ]; then
+            echo "ERROR: 未生成目标文件！"
+            ls -l  # 列出所有文件，便于排查未生成原因
+            exit 1
+          fi
+          
+          echo "=== 生成的文件如下 ==="
+          ls -l domestic_ikuai_*.txt
+
+      # 步骤5：手动执行 Git 完整流程（核心修复：不依赖第三方 Action，直接用原生命令）
+      - name: Git add + commit + push (native commands)
+        run: |
+          # 1. 配置 Git 身份（必选，避免提交身份异常）
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+          # 2. 拉取最新代码（避免本地分支与远程冲突）
+          git pull origin main --rebase
+          
+          # 3. 显式添加目标文件（用绝对路径+通配符，确保匹配）
+          git add ./domestic_ikuai_acl-*.txt
+          git add ./domestic_ikuai_ipgroup-*.txt
+          
+          # 4. 检查暂存区状态（关键：输出日志，确认文件已添加）
+          echo "=== 暂存区状态 ==="
+          git status
+          
+          # 5. 仅在有修改时提交（避免空提交）
+          if git diff --cached --quiet; then
+            echo "=== 无新文件/修改，无需提交 ==="
+          else
+            git commit -m "Auto generate ikuai files (run at: ${{ github.run_started_at }})"
+            # 6. 推送至远程仓库（用 GitHub 内置 token 授权）
+            git push origin main
+            echo "=== 提交并推送成功 ==="
+          fi
+        env:
+          # 自动注入 GitHub 授权 token（无需手动配置）
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 步骤6（可选）：清理旧日志
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          keep_minimum_runs: 5
+          workflow_id: "Auto Update Ikuai Files (Fixed Add Issue)"
